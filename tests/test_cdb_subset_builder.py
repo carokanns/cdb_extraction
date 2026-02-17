@@ -90,5 +90,22 @@ class MainDedupeTests(unittest.TestCase):
         self.assertEqual(second_group_line, ["e2e4", "e7e5"])
 
 
+class CliErrorHandlingTests(unittest.TestCase):
+    def test_invalid_input_prints_error_and_usage(self):
+        with mock.patch(
+            "cdb_subset_builder.main",
+            side_effect=ValueError("Inga seed-linjer hittades i 'bad.pgn'."),
+        ):
+            stderr = io.StringIO()
+            with mock.patch("sys.stderr", stderr):
+                with self.assertRaises(SystemExit) as exit_ctx:
+                    cdb_subset_builder.run_cli()
+            self.assertEqual(exit_ctx.exception.code, 2)
+            out = stderr.getvalue()
+            self.assertIn("[error]", out)
+            self.assertIn("Syntax:", out)
+            self.assertIn("usage:", out)
+
+
 if __name__ == "__main__":
     unittest.main()

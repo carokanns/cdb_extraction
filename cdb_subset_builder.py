@@ -196,6 +196,10 @@ def read_seed_games(pgn_path):
             game = chess.pgn.read_game(handle)
             if game is None:
                 break
+            if game.errors:
+                raise ValueError(
+                    f"Ogiltig PGN i seed-fil '{pgn_path}' (parti innehåller parse-fel)."
+                )
             uci_moves = [move.uci() for move in game.mainline_moves()]
             if uci_moves:
                 seeds.append(uci_moves)
@@ -252,7 +256,7 @@ def write_seed_groups_as_pgn(seed_groups, out_path):
             print(game, file=handle, end="\n\n")
 
 
-def main():
+def build_parser():
     parser = argparse.ArgumentParser(
         description="Bygg en delmängd av CDB från seed-PGN."
     )
@@ -296,11 +300,27 @@ def main():
         action="store_true",
         help="Ta bort dubletter även mellan olika seed-partier.",
     )
+    return parser
+
+
+def main():
+    parser = build_parser()
     args = parser.parse_args()
+
+    if args.max_plies <= 0:
+        raise ValueError("--max-plies måste vara > 0.")
+    if args.topn < 0:
+        raise ValueError("--topn måste vara >= 0.")
+    if args.sleep < 0:
+        raise ValueError("--sleep måste vara >= 0.")
 
     delta = None if args.delta < 0 else args.delta
 
     seeds = read_seed_games(args.pgn)
+    if not seeds:
+        raise ValueError(
+            f"Inga seed-linjer hittades i '{args.pgn}'. Kontrollera inputformatet."
+        )
     seed_groups = []
 
     for seed in seeds:
@@ -338,5 +358,16 @@ def main():
     print(f"Skrev {len(seed_groups)} partier ({total_lines} linjer) till {args.out}")
 
 
+def run_cli():
+    try:
+        main()
+    except (OSError, ValueError, RequestException) as error:
+        print(f"[error] {error}", file=sys.stderr)
+        print("", file=sys.stderr)
+        print("Syntax:", file=sys.stderr)
+        build_parser().print_usage(sys.stderr)
+        sys.exit(2)
+
+
 if __name__ == "__main__":
-    main()
+    run_cli()
