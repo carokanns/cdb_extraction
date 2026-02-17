@@ -2,6 +2,7 @@
 """Build a subset PGN tree from seed lines using ChessDB queryall responses."""
 
 import argparse
+import math
 import sys
 import time
 
@@ -11,6 +12,8 @@ import requests
 from requests import RequestException
 
 CDB_URL = "https://www.chessdb.cn/cdb.php"
+MATE_SCORE_THRESHOLD = 30000
+MATE_SCORE_BASE = 32000
 
 
 def cdb_queryall(fen: str, learn: int = 1) -> str:
@@ -199,19 +202,32 @@ def read_seed_games(pgn_path):
     return seeds
 
 
+def format_eval_tag(score: int | None) -> str | None:
+    if score is None:
+        return None
+
+    # Common engine convention: large centipawn-like values encode mate distance.
+    if abs(score) >= MATE_SCORE_THRESHOLD:
+        plies_to_mate = max(1, MATE_SCORE_BASE - abs(score))
+        moves_to_mate = max(1, math.ceil(plies_to_mate / 2))
+        sign = "" if score > 0 else "-"
+        return f"[%eval {sign}#{moves_to_mate}]"
+
+    return f"[%eval {score / 100:.2f}]"
+
+
 def write_lines_as_pgn(lines, out_path):
     with open(out_path, "w", encoding="utf-8") as handle:
         for idx, (line, line_score) in enumerate(lines, 1):
             game = chess.pgn.Game()
             game.headers["Event"] = "CDB subset"
             game.headers["Round"] = str(idx)
-            if line_score is not None:
-                game.headers["CDBScore"] = str(line_score)
             node = game
             for move in line:
                 node = node.add_variation(move)
-            if line_score is not None and node is not game:
-                node.comment = f"score {line_score}"
+            eval_tag = format_eval_tag(line_score)
+            if eval_tag is not None and node is not game:
+                node.comment = eval_tag
             print(game, file=handle, end="\n\n")
 
 
