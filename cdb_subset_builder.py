@@ -216,18 +216,39 @@ def format_eval_tag(score: int | None) -> str | None:
     return f"[%eval {score / 100:.2f}]"
 
 
-def write_lines_as_pgn(lines, out_path):
+def add_line_to_game(game: chess.pgn.Game, line, line_score: int | None):
+    """Add a full line to a game tree, reusing existing nodes when possible."""
+    node = game
+    for move in line:
+        next_node = None
+        for child in node.variations:
+            if child.move == move:
+                next_node = child
+                break
+        if next_node is None:
+            next_node = node.add_variation(move)
+        node = next_node
+
+    eval_tag = format_eval_tag(line_score)
+    if eval_tag is not None and node is not game and not node.comment:
+        node.comment = eval_tag
+
+
+def write_seed_groups_as_pgn(seed_groups, out_path):
     with open(out_path, "w", encoding="utf-8") as handle:
-        for idx, (line, line_score) in enumerate(lines, 1):
+        for idx, lines in enumerate(seed_groups, 1):
+            if not lines:
+                continue
+
             game = chess.pgn.Game()
             game.headers["Event"] = "CDB subset"
             game.headers["Round"] = str(idx)
-            node = game
-            for move in line:
-                node = node.add_variation(move)
-            eval_tag = format_eval_tag(line_score)
-            if eval_tag is not None and node is not game:
-                node.comment = eval_tag
+
+            # First generated line is the mainline, remaining lines become side variations.
+            add_line_to_game(game, lines[0][0], lines[0][1])
+            for line, line_score in lines[1:]:
+                add_line_to_game(game, line, line_score)
+
             print(game, file=handle, end="\n\n")
 
 
@@ -280,7 +301,7 @@ def main():
     delta = None if args.delta < 0 else args.delta
 
     seeds = read_seed_games(args.pgn)
-    all_lines = []
+    seed_groups = []
 
     for seed in seeds:
         lines = expand_from_seed(
@@ -294,20 +315,27 @@ def main():
             queue_unknown=args.queue_unknown,
             sleep_s=args.sleep,
         )
-        all_lines.extend(lines)
+        seed_groups.append(lines)
 
     if args.dedupe_global:
         seen = set()
-        unique = []
-        for line, line_score in all_lines:
-            key = tuple(move.uci() for move in line)
-            if key not in seen:
-                seen.add(key)
-                unique.append((line, line_score))
-        all_lines = unique
+        deduped_groups = []
+        for group in seed_groups:
+            deduped_group = []
+            for line, line_score in group:
+                key = tuple(move.uci() for move in line)
+                if key not in seen:
+                    seen.add(key)
+                    deduped_group.append((line, line_score))
+            # Keep one game per seed even when global dedupe removes all variants.
+            if not deduped_group and group:
+                deduped_group = [group[0]]
+            deduped_groups.append(deduped_group)
+        seed_groups = deduped_groups
 
-    write_lines_as_pgn(all_lines, args.out)
-    print(f"Skrev {len(all_lines)} linjer till {args.out}")
+    write_seed_groups_as_pgn(seed_groups, args.out)
+    total_lines = sum(len(group) for group in seed_groups)
+    print(f"Skrev {len(seed_groups)} partier ({total_lines} linjer) till {args.out}")
 
 
 if __name__ == "__main__":
