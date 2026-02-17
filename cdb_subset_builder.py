@@ -115,17 +115,17 @@ def expand_from_seed(
         board0.push_uci(uci)
 
     target_len = max_plies_total
-    stack = [list(board0.move_stack)]
+    stack = [(list(board0.move_stack), None)]
     done = []
 
     while stack:
-        line = stack.pop()
+        line, line_score = stack.pop()
         board = chess.Board()
         for move in line:
             board.push(move)
 
         if len(line) >= target_len:
-            done.append(line)
+            done.append((line, line_score))
             continue
 
         fen = board.fen()
@@ -133,7 +133,7 @@ def expand_from_seed(
             raw = cdb_queryall(fen, learn=learn)
         except RequestException as error:
             print(f"[warn] cdb query failed for fen '{fen}': {error}", file=sys.stderr)
-            done.append(line)
+            done.append((line, line_score))
             continue
 
         if raw.strip().lower() == "unknown":
@@ -145,7 +145,7 @@ def expand_from_seed(
                         f"[warn] cdb queue failed for fen '{fen}': {error}",
                         file=sys.stderr,
                     )
-            done.append(line)
+            done.append((line, line_score))
             continue
 
         candidates = pick_moves(
@@ -157,14 +157,14 @@ def expand_from_seed(
         )
 
         if not candidates:
-            done.append(line)
+            done.append((line, line_score))
             continue
 
         for candidate in candidates:
             try:
                 move = chess.Move.from_uci(candidate["uci"])
                 if move in board.legal_moves:
-                    stack.append(line + [move])
+                    stack.append((line + [move], candidate.get("score")))
             except Exception as error:  # noqa: BLE001
                 print(
                     f"[warn] invalid candidate move '{candidate.get('uci')}' ({error})",
@@ -177,11 +177,11 @@ def expand_from_seed(
     # Deduplicate while preserving order.
     seen = set()
     unique = []
-    for line in done:
+    for line, line_score in done:
         key = tuple(m.uci() for m in line)
         if key not in seen:
             seen.add(key)
-            unique.append(line)
+            unique.append((line, line_score))
 
     return unique
 
@@ -201,13 +201,17 @@ def read_seed_games(pgn_path):
 
 def write_lines_as_pgn(lines, out_path):
     with open(out_path, "w", encoding="utf-8") as handle:
-        for idx, line in enumerate(lines, 1):
+        for idx, (line, line_score) in enumerate(lines, 1):
             game = chess.pgn.Game()
             game.headers["Event"] = "CDB subset"
             game.headers["Round"] = str(idx)
+            if line_score is not None:
+                game.headers["CDBScore"] = str(line_score)
             node = game
             for move in line:
                 node = node.add_variation(move)
+            if line_score is not None and node is not game:
+                node.comment = f"score {line_score}"
             print(game, file=handle, end="\n\n")
 
 
@@ -279,11 +283,11 @@ def main():
     if args.dedupe_global:
         seen = set()
         unique = []
-        for line in all_lines:
+        for line, line_score in all_lines:
             key = tuple(move.uci() for move in line)
             if key not in seen:
                 seen.add(key)
-                unique.append(line)
+                unique.append((line, line_score))
         all_lines = unique
 
     write_lines_as_pgn(all_lines, args.out)

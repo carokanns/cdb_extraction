@@ -33,3 +33,4 @@ Thumbs.db
 # Local output files
 cdb_subset.pgn
 subset_*.pgn
+*_subset.pgn
