@@ -69,7 +69,6 @@ class MainDedupeTests(unittest.TestCase):
 
         argv = [
             "cdb_subset_builder.py",
-            "--pgn",
             "seed.pgn",
             "--out",
             "out.pgn",
@@ -91,6 +90,19 @@ class MainDedupeTests(unittest.TestCase):
 
 
 class CliErrorHandlingTests(unittest.TestCase):
+    def test_missing_required_args_prints_error_and_usage(self):
+        stderr = io.StringIO()
+        with mock.patch.object(sys, "argv", ["cdb_subset_builder.py"]):
+            with mock.patch("sys.stderr", stderr):
+                with self.assertRaises(SystemExit) as exit_ctx:
+                    cdb_subset_builder.run_cli()
+        self.assertEqual(exit_ctx.exception.code, 2)
+        out = stderr.getvalue()
+        self.assertIn("[error]", out)
+        self.assertIn("required", out)
+        self.assertIn("Syntax:", out)
+        self.assertIn("usage:", out)
+
     def test_invalid_input_prints_error_and_usage(self):
         with mock.patch(
             "cdb_subset_builder.main",

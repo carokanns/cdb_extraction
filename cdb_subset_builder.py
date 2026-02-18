@@ -16,6 +16,13 @@ MATE_SCORE_THRESHOLD = 30000
 MATE_SCORE_BASE = 32000
 
 
+class FriendlyArgumentParser(argparse.ArgumentParser):
+    """ArgumentParser that surfaces parse errors via ValueError."""
+
+    def error(self, message):
+        raise ValueError(message)
+
+
 def cdb_queryall(fen: str, learn: int = 1) -> str:
     params = {"action": "queryall", "board": fen, "learn": str(learn)}
     response = requests.get(CDB_URL, params=params, timeout=30)
@@ -257,10 +264,10 @@ def write_seed_groups_as_pgn(seed_groups, out_path):
 
 
 def build_parser():
-    parser = argparse.ArgumentParser(
+    parser = FriendlyArgumentParser(
         description="Bygg en delmängd av CDB från seed-PGN."
     )
-    parser.add_argument("--pgn", required=True, help="Seed-PGN med öppningslinjer.")
+    parser.add_argument("pgn", help="Seed-PGN med öppningslinjer.")
     parser.add_argument(
         "--out", default="cdb_subset.pgn", help="Ut-PGN med genererade linjer."
     )

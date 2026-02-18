@@ -19,7 +19,7 @@ python -m pip install -r requirements.txt
 
 ```bash
 python cdb_subset_builder.py \
-  --pgn seed.pgn \
+  seed.pgn \
   --out cdb_subset.pgn \
   --max-plies 18 \
   --topn 3 \
@@ -28,7 +28,7 @@ python cdb_subset_builder.py \
 
 ## Viktiga flaggor
 
-- `--pgn` (krävs): seed-PGN med öppningslinjer.
+- `pgn` (krävs): seed-PGN med öppningslinjer (positionellt argument).
 - `--out`: output-PGN (default: `cdb_subset.pgn`).
 - `--max-plies`: max antal halvdrag totalt inklusive seed.
 - `--topn`: max antal kandidater per position efter filtrering.
@@ -44,7 +44,7 @@ python cdb_subset_builder.py \
 
 ```bash
 python cdb_subset_builder.py \
-  --pgn seed.pgn \
+  seed.pgn \
   --out subset_strict.pgn \
   --max-plies 22 \
   --topn 2 \
