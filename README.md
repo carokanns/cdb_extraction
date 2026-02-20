@@ -14,6 +14,9 @@ python -m pip install -r requirements.txt
 
 - `requests`
 - `python-chess`
+- `google-api-python-client` (för Gmail-exemplet nedan)
+- `google-auth-httplib2` (för Gmail-exemplet nedan)
+- `google-auth-oauthlib` (för Gmail-exemplet nedan)
 
 ## Snabbstart
 
@@ -56,6 +59,48 @@ python cdb_subset_builder.py \
 ## Output
 
 Skriptet skriver en PGN där varje genererad linje sparas som ett separat parti.
+
+## Gmail read-only (valfritt)
+
+Om du vill läsa din Gmail från CLI med OAuth (utan lösenord i kod) finns `gmail_reader.py`.
+
+1. Gå till Google Cloud Console.
+2. Skapa ett projekt (eller använd ett befintligt).
+3. Aktivera **Gmail API**.
+4. Skapa OAuth-klient av typen **Desktop app**.
+5. Ladda ner JSON-filen och spara den som `gmail_credentials.json` i projektroten.
+
+Installera beroenden:
+
+```bash
+python -m pip install -r requirements.txt
+```
+
+Första körningen öppnar webbläsaren för inloggning/samtycke och sparar token i `gmail_token.json`.
+
+Lista senaste mejlen:
+
+```bash
+python gmail_reader.py list --max-results 10
+```
+
+Lista med Gmail-query:
+
+```bash
+python gmail_reader.py list --query "newer_than:7d from:example@domain.com"
+```
+
+Läs ett specifikt mejl:
+
+```bash
+python gmail_reader.py read <MESSAGE_ID>
+```
+
+Anpassade sökvägar:
+
+```bash
+python gmail_reader.py --credentials path/to/client.json --token path/to/token.json list
+```
 
 ## Licens
 
