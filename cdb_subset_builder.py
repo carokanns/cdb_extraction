@@ -353,8 +353,11 @@ def main():
             f"Inga seed-linjer hittades i '{args.pgn}'. Kontrollera inputformatet."
         )
     seed_groups = []
+    total_seeds = len(seeds)
 
-    for seed in seeds:
+    for idx, seed in enumerate(seeds, 1):
+        print(f"[progress] Seed {idx}/{total_seeds}: startar ({len(seed)} plies).")
+        started_at = time.time()
         lines = expand_from_seed(
             seed_moves_uci=seed,
             max_plies_total=args.max_plies,
@@ -369,6 +372,10 @@ def main():
             sleep_s=args.sleep,
         )
         seed_groups.append(lines)
+        elapsed = time.time() - started_at
+        print(
+            f"[progress] Seed {idx}/{total_seeds}: klar ({len(lines)} linjer, {elapsed:.1f}s)."
+        )
 
     if args.dedupe_global:
         seen = set()
