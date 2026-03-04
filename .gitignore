@@ -35,10 +35,3 @@ cdb_subset.pgn
 subset_*.pgn
 *_subset.pgn
 
-# Gmail OAuth secrets/tokens
-gmail_credentials.json
-gmail_token.json
-
-# Anything starting with lumbra
-lumbra*
-Lumbra*

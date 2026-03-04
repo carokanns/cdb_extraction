@@ -89,6 +89,36 @@ class MainDedupeTests(unittest.TestCase):
         self.assertEqual(second_group_line, ["e2e4", "e7e5"])
 
 
+class SideSpecificTopnTests(unittest.TestCase):
+    @mock.patch("cdb_subset_builder.cdb_queryall")
+    def test_expand_uses_different_topn_for_white_and_black(self, mock_cdb_queryall):
+        def fake_queryall(fen, learn=1):
+            board = chess.Board(fen)
+            if board.turn == chess.WHITE:
+                return "move:e2e4,score:100|move:d2d4,score:90"
+            return "move:e7e5,score:80|move:c7c5,score:70"
+
+        mock_cdb_queryall.side_effect = fake_queryall
+        lines = cdb_subset_builder.expand_from_seed(
+            seed_moves_uci=[],
+            max_plies_total=2,
+            topn=3,
+            topn_white=2,
+            topn_black=1,
+            delta=None,
+            min_score=None,
+            min_winrate=None,
+            learn=1,
+            queue_unknown=False,
+            sleep_s=0,
+        )
+
+        uci_lines = [[move.uci() for move in line] for line, _ in lines]
+        self.assertEqual(len(uci_lines), 2)
+        self.assertEqual({line[0] for line in uci_lines}, {"e2e4", "d2d4"})
+        self.assertTrue(all(line[1] == "e7e5" for line in uci_lines))
+
+
 class CliErrorHandlingTests(unittest.TestCase):
     def test_missing_required_args_prints_error_and_usage(self):
         stderr = io.StringIO()

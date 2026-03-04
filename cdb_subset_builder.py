@@ -113,6 +113,8 @@ def expand_from_seed(
     seed_moves_uci,
     max_plies_total,
     topn,
+    topn_white,
+    topn_black,
     delta,
     min_score,
     min_winrate,
@@ -160,7 +162,13 @@ def expand_from_seed(
 
         candidates = pick_moves(
             parse_queryall(raw),
-            topn=topn,
+            topn=(
+                topn_white
+                if board.turn == chess.WHITE and topn_white is not None
+                else topn_black
+                if board.turn == chess.BLACK and topn_black is not None
+                else topn
+            ),
             delta=delta,
             min_score=min_score,
             min_winrate=min_winrate,
@@ -281,6 +289,18 @@ def build_parser():
         "--topn", type=int, default=3, help="Max antal drag att behålla per position."
     )
     parser.add_argument(
+        "--topn-white",
+        type=int,
+        default=None,
+        help="Max antal drag för vit. Om ej satt används --topn.",
+    )
+    parser.add_argument(
+        "--topn-black",
+        type=int,
+        default=None,
+        help="Max antal drag för svart. Om ej satt används --topn.",
+    )
+    parser.add_argument(
         "--delta",
         type=int,
         default=30,
@@ -318,6 +338,10 @@ def main():
         raise ValueError("--max-plies måste vara > 0.")
     if args.topn < 0:
         raise ValueError("--topn måste vara >= 0.")
+    if args.topn_white is not None and args.topn_white < 0:
+        raise ValueError("--topn-white måste vara >= 0.")
+    if args.topn_black is not None and args.topn_black < 0:
+        raise ValueError("--topn-black måste vara >= 0.")
     if args.sleep < 0:
         raise ValueError("--sleep måste vara >= 0.")
 
@@ -335,6 +359,8 @@ def main():
             seed_moves_uci=seed,
             max_plies_total=args.max_plies,
             topn=args.topn,
+            topn_white=args.topn_white,
+            topn_black=args.topn_black,
             delta=delta,
             min_score=args.min_score,
             min_winrate=args.min_winrate,
