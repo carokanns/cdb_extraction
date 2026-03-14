@@ -26,6 +26,12 @@ För svartrepertoar (en kandidat för svart, flera för vit):
 python cdb_subset_builder.py seed.pgn --out black_rep.pgn --topn-white 4 --topn-black 1 --delta 30
 ```
 
+För en enda "optimal" huvudlinje enligt CDB:s principal variation:
+
+```bash
+python cdb_subset_builder.py seed.pgn --cdb-action querypv --out cdb_pv.pgn
+```
+
 ## Vanliga flaggor
 
 - `pgn` (krävs): seed-PGN.
@@ -37,6 +43,7 @@ python cdb_subset_builder.py seed.pgn --out black_rep.pgn --topn-white 4 --topn-
 - `--delta`: behåll drag inom `(bästa score - delta)`, `-1` stänger av.
 - `--min-score`: minsta tillåtna score.
 - `--min-winrate`: minsta tillåtna winrate.
+- `--cdb-action`: `queryall` för flera kandidater eller `querypv` för CDB:s PV.
 - `--sleep`: paus mellan API-anrop.
 - `--dedupe-global`: ta bort dubletter mellan seed-linjer.
 

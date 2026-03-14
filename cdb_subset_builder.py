@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build a subset PGN tree from seed lines using ChessDB queryall responses."""
+"""Build a subset PGN tree from seed lines using ChessDB responses."""
 
 import argparse
 import math
@@ -32,6 +32,13 @@ def cdb_queryall(fen: str, learn: int = 1) -> str:
 
 def cdb_queue(fen: str) -> str:
     params = {"action": "queue", "board": fen}
+    response = requests.get(CDB_URL, params=params, timeout=30)
+    response.raise_for_status()
+    return response.text.strip()
+
+
+def cdb_querypv(fen: str, learn: int = 1) -> str:
+    params = {"action": "querypv", "board": fen, "learn": str(learn)}
     response = requests.get(CDB_URL, params=params, timeout=30)
     response.raise_for_status()
     return response.text.strip()
@@ -77,6 +84,28 @@ def parse_queryall(text: str):
             out.append(move_data)
 
     return out
+
+
+def parse_querypv(text: str):
+    """Parse CDB querypv output into a score and PV move list."""
+    normalized = text.strip().lower()
+    if normalized in {"unknown", "invalid board", ""}:
+        return None, []
+
+    score = None
+    pv_moves = []
+    for field in text.split(","):
+        field = field.strip()
+        if field.startswith("score:"):
+            try:
+                score = int(field.split(":", 1)[1])
+            except ValueError:
+                pass
+        elif field.startswith("pv:"):
+            raw_pv = field.split(":", 1)[1].strip()
+            pv_moves = [move for move in raw_pv.split("|") if move]
+
+    return score, pv_moves
 
 
 def pick_moves(
@@ -204,6 +233,57 @@ def expand_from_seed(
     return unique
 
 
+def expand_from_seed_pv(
+    seed_moves_uci,
+    max_plies_total,
+    learn,
+    queue_unknown,
+):
+    board = chess.Board()
+    for uci in seed_moves_uci:
+        board.push_uci(uci)
+
+    if len(board.move_stack) >= max_plies_total:
+        return [(list(board.move_stack), None)]
+
+    fen = board.fen()
+    try:
+        raw = cdb_querypv(fen, learn=learn)
+    except RequestException as error:
+        print(f"[warn] cdb querypv failed for fen '{fen}': {error}", file=sys.stderr)
+        return [(list(board.move_stack), None)]
+
+    if raw.strip().lower() == "unknown":
+        if queue_unknown:
+            try:
+                cdb_queue(fen)
+            except RequestException as error:
+                print(
+                    f"[warn] cdb queue failed for fen '{fen}': {error}",
+                    file=sys.stderr,
+                )
+        return [(list(board.move_stack), None)]
+
+    line_score, pv_moves = parse_querypv(raw)
+    line = list(board.move_stack)
+
+    for uci in pv_moves:
+        if len(line) >= max_plies_total:
+            break
+        try:
+            move = chess.Move.from_uci(uci)
+        except ValueError as error:
+            print(f"[warn] invalid pv move '{uci}' ({error})", file=sys.stderr)
+            break
+        if move not in board.legal_moves:
+            print(f"[warn] illegal pv move '{uci}' for fen '{fen}'", file=sys.stderr)
+            break
+        board.push(move)
+        line.append(move)
+
+    return [(line, line_score)]
+
+
 def read_seed_games(pgn_path):
     seeds = []
     with open(pgn_path, "r", encoding="utf-8") as handle:
@@ -321,6 +401,12 @@ def build_parser():
         action="store_true",
         help="Köa okända positioner i CDB (action=queue).",
     )
+    parser.add_argument(
+        "--cdb-action",
+        choices=["queryall", "querypv"],
+        default="queryall",
+        help="Vilket CDB-anrop som ska användas. queryall bygger flera kandidater, querypv bygger CDB:s bästa PV.",
+    )
     parser.add_argument("--sleep", type=float, default=0.15, help="Paus mellan API-anrop.")
     parser.add_argument(
         "--dedupe-global",
@@ -356,21 +442,31 @@ def main():
     total_seeds = len(seeds)
 
     for idx, seed in enumerate(seeds, 1):
-        print(f"[progress] Seed {idx}/{total_seeds}: startar ({len(seed)} plies).")
-        started_at = time.time()
-        lines = expand_from_seed(
-            seed_moves_uci=seed,
-            max_plies_total=args.max_plies,
-            topn=args.topn,
-            topn_white=args.topn_white,
-            topn_black=args.topn_black,
-            delta=delta,
-            min_score=args.min_score,
-            min_winrate=args.min_winrate,
-            learn=args.learn,
-            queue_unknown=args.queue_unknown,
-            sleep_s=args.sleep,
+        print(
+            f"[progress] Seed {idx}/{total_seeds}: startar ({len(seed)} plies, {args.cdb_action})."
         )
+        started_at = time.time()
+        if args.cdb_action == "querypv":
+            lines = expand_from_seed_pv(
+                seed_moves_uci=seed,
+                max_plies_total=args.max_plies,
+                learn=args.learn,
+                queue_unknown=args.queue_unknown,
+            )
+        else:
+            lines = expand_from_seed(
+                seed_moves_uci=seed,
+                max_plies_total=args.max_plies,
+                topn=args.topn,
+                topn_white=args.topn_white,
+                topn_black=args.topn_black,
+                delta=delta,
+                min_score=args.min_score,
+                min_winrate=args.min_winrate,
+                learn=args.learn,
+                queue_unknown=args.queue_unknown,
+                sleep_s=args.sleep,
+            )
         seed_groups.append(lines)
         elapsed = time.time() - started_at
         print(
