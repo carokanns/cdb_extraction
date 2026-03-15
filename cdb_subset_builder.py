@@ -23,6 +23,25 @@ class FriendlyArgumentParser(argparse.ArgumentParser):
         raise ValueError(message)
 
 
+class FriendlyDefaultsFormatter(argparse.ArgumentDefaultsHelpFormatter):
+    """Show boolean defaults using the corresponding CLI flag."""
+
+    def _get_help_string(self, action):
+        help_text = action.help or ""
+        if "%(default)" in help_text:
+            return help_text
+
+        if isinstance(action, argparse.BooleanOptionalAction):
+            default_flag = (
+                f"--{action.dest.replace('_', '-')}"
+                if action.default
+                else f"--no-{action.dest.replace('_', '-')}"
+            )
+            return f"{help_text} (default: {default_flag})"
+
+        return super()._get_help_string(action)
+
+
 def cdb_queryall(fen: str, learn: int = 1) -> str:
     params = {"action": "queryall", "board": fen, "learn": str(learn)}
     response = requests.get(CDB_URL, params=params, timeout=30)
@@ -353,7 +372,8 @@ def write_seed_groups_as_pgn(seed_groups, out_path):
 
 def build_parser():
     parser = FriendlyArgumentParser(
-        description="Bygg en delmängd av CDB från seed-PGN."
+        description="Bygg en delmängd av CDB från seed-PGN.",
+        formatter_class=FriendlyDefaultsFormatter,
     )
     parser.add_argument("pgn", help="Seed-PGN med öppningslinjer.")
     parser.add_argument(
@@ -395,10 +415,11 @@ def build_parser():
         default=None,
         help="Släng drag med winrate under detta (om CDB ger winrate).",
     )
-    parser.add_argument("--learn", type=int, default=1, help="CDB learn=1 (default).")
+    parser.add_argument("--learn", type=int, default=1, help="CDB learn-parameter.")
     parser.add_argument(
         "--queue-unknown",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
+        default=False,
         help="Köa okända positioner i CDB (action=queue).",
     )
     parser.add_argument(
@@ -410,7 +431,8 @@ def build_parser():
     parser.add_argument("--sleep", type=float, default=0.15, help="Paus mellan API-anrop.")
     parser.add_argument(
         "--dedupe-global",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
+        default=False,
         help="Ta bort dubletter även mellan olika seed-partier.",
     )
     return parser
